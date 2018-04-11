@@ -222,6 +222,8 @@ public class AvroUtils {
       org.apache.avro.Schema.Type fieldType = fieldSchema.getType();
       if (fieldType == org.apache.avro.Schema.Type.ARRAY) {
         return FieldSpec.DataType.valueOf(extractSupportedSchema(fieldSchema.getElementType()).getType());
+      } else if (fieldType == org.apache.avro.Schema.Type.BYTES) {
+        return FieldSpec.DataType.STRING;
       } else {
         return FieldSpec.DataType.valueOf(fieldType);
       }
