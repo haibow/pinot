@@ -16,35 +16,20 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.core.io.reader.impl.v1;
+package org.apache.pinot.core.segment.extracolumn;
 
-import java.io.IOException;
-import org.apache.pinot.common.utils.Pairs;
-import org.apache.pinot.core.io.reader.ReaderContext;
-import org.apache.pinot.core.io.reader.SingleColumnSingleValueReader;
-import org.apache.pinot.core.segment.index.readers.InvertedIndexReader;
+import org.apache.pinot.core.segment.index.readers.Dictionary;
+import org.apache.pinot.core.segment.index.readers.UniqueBytesDictionary;
 
 
 /**
- * Interface for sorted index readers.
+ * Extra column provider for an extra column that contains a single bytes(either single-value or multi-value).
  */
-public interface SortedIndexReader<T extends ReaderContext> extends SingleColumnSingleValueReader<T>, InvertedIndexReader<Pairs.IntPair> {
-  @Override
-  int getInt(int row);
+public class UniqueBytesExtraColumnProvider extends BaseExtraColumnProvider {
 
   @Override
-  int getInt(int row, T context);
-
-  @Override
-  void readValues(int[] rows, int rowsStartIndex, int rowSize, int[] values, int valuesStartIndex);
-
-  @Override
-  T createContext();
-
-  @Override
-  Pairs.IntPair getDocIds(int dictId);
-
-  @Override
-  void close()
-      throws IOException;
+  public Dictionary buildDictionary(ExtraColumnContext context) {
+    return new UniqueBytesDictionary((byte[]) context.getFieldSpec().getDefaultNullValue());
+  }
 }
+

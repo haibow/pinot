@@ -26,10 +26,14 @@
         <pattern>%d{HH:mm:ss.SSS} %p [%c{1}] [%t] %m%n</pattern>
       </PatternLayout>
     </Console>
+    <File name="IntegrationTests" fileName="integrationTests.log" immediateFlush="true" append="false">
+      <PatternLayout pattern="%d{yyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+    </File>
   </Appenders>
   <Loggers>
-    <AsyncRoot level="warn" additivity="false">
+    <AsyncRoot level="debug" additivity="false">
       <AppenderRef ref="console" />
+      <AppenderRef ref="IntegrationTests" />
     </AsyncRoot>
   </Loggers>
 </Configuration>

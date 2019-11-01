@@ -22,6 +22,8 @@ import java.util.Set;
 import org.apache.commons.configuration.Configuration;
 import org.apache.pinot.core.indexsegment.IndexSegment;
 import org.apache.pinot.core.query.request.ServerQueryRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
@@ -29,6 +31,7 @@ import org.apache.pinot.core.query.request.ServerQueryRequest;
  * the segment schema.
  */
 public class DataSchemaSegmentPruner implements SegmentPruner {
+  private  static final Logger LOGGER = LoggerFactory.getLogger(DataSchemaSegmentPruner .class);
 
   @Override
   public void init(Configuration config) {
@@ -36,8 +39,11 @@ public class DataSchemaSegmentPruner implements SegmentPruner {
 
   @Override
   public boolean prune(IndexSegment segment, ServerQueryRequest queryRequest) {
-    Set<String> columnsInSchema = segment.getSegmentMetadata().getSchema().getColumnNames();
-    return !columnsInSchema.containsAll(queryRequest.getAllColumns());
+//    Set<String> columnsInSchema = segment.getSegmentMetadata().getSchema().getColumnNames();
+//    LOGGER.debug("columnsInSegmentMetadata: " + columnsInSchema.toString());
+//    LOGGER.debug("columnsInSegmentAllColumns: " + segment.getColumnNames().toString());
+//    LOGGER.debug("columnsInQuery: " + queryRequest.getAllColumns());
+    return !segment.getColumnNames().containsAll(queryRequest.getAllColumns());
   }
 
   @Override

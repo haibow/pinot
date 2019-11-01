@@ -16,47 +16,56 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.core.segment.virtualcolumn;
+package org.apache.pinot.core.segment.index.readers;
 
-import java.io.IOException;
-import java.util.Arrays;
-import org.apache.pinot.core.io.reader.BaseSingleColumnSingleValueReader;
-import org.apache.pinot.core.io.reader.DataFileReader;
-import org.apache.pinot.core.io.reader.impl.ChunkReaderContext;
+import java.nio.ByteBuffer;
 
 
-/**
- * Forward index that contains a single integer value.
- */
-public class IntSingleValueDataFileReader extends BaseSingleColumnSingleValueReader<ChunkReaderContext> implements DataFileReader<ChunkReaderContext> {
-  private int _value;
+public class UniqueBytesDictionary extends BaseImmutableDictionary {
+  final byte[] _value;
 
-  public IntSingleValueDataFileReader(int value) {
+  public UniqueBytesDictionary(byte[] value) {
+    super(1);
     _value = value;
   }
 
   @Override
-  public int getInt(int row) {
+  public int insertionIndexOf(String stringValue) {
+    return 0;
+  }
+
+  @Override
+  public byte[] get(int dictId) {
     return _value;
   }
 
   @Override
-  public int getInt(int rowId, ChunkReaderContext context) {
+  public byte[] getBytesValue(int dictId) {
     return _value;
   }
 
   @Override
-  public void close()
-      throws IOException {
+  public int getIntValue(int dictId) {
+    return ByteBuffer.wrap(_value).getInt();
   }
 
   @Override
-  public void readValues(int[] rows, int rowStartPos, int rowSize, int[] values, int valuesStartPos) {
-    Arrays.fill(values, valuesStartPos, rowSize, 0);
+  public long getLongValue(int dictId) {
+    return ByteBuffer.wrap(_value).getLong();
   }
 
   @Override
-  public ChunkReaderContext createContext() {
-    return null;
+  public float getFloatValue(int dictId) {
+    return ByteBuffer.wrap(_value).getFloat();
+  }
+
+  @Override
+  public double getDoubleValue(int dictId) {
+    return ByteBuffer.wrap(_value).getDouble();
+  }
+
+  @Override
+  public String getStringValue(int dictId) {
+    return ByteBuffer.wrap(_value).toString();
   }
 }

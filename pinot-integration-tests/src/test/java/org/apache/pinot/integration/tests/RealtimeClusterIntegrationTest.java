@@ -25,10 +25,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.io.FileUtils;
-import org.apache.pinot.common.data.Schema;
-import org.apache.pinot.core.realtime.impl.kafka.KafkaStarterUtils;
 import org.apache.pinot.util.TestUtils;
-import org.testng.Assert;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
@@ -38,6 +37,7 @@ import org.testng.annotations.Test;
  * Integration test that creates a Kafka broker, creates a Pinot cluster that consumes from Kafka and queries Pinot.
  */
 public class RealtimeClusterIntegrationTest extends BaseClusterIntegrationTestSet {
+  private  static final Logger LOGGER = LoggerFactory.getLogger(RealtimeClusterIntegrationTest .class);
 
   @BeforeClass
   public void setUp()
@@ -151,6 +151,7 @@ public class RealtimeClusterIntegrationTest extends BaseClusterIntegrationTestSe
   @AfterClass
   public void tearDown()
       throws Exception {
+    LOGGER.info("============== Tearing Down ==============");
     dropRealtimeTable(getTableName());
     stopServer();
     stopBroker();

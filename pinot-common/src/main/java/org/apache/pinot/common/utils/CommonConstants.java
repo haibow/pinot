@@ -94,6 +94,14 @@ public class CommonConstants {
       public static final String ADMIN_PORT_KEY = "adminPort";
     }
 
+    public static class Schema {
+      public static final String SCHEMA_NAME_KEY = "schemaName";
+      public static final String DIMENSION_FIELD_SPECS_KEY = "dimensionFieldSpecs";
+      public static final String METRIC_FIELD_SPECS_KEY = "metricFieldSpecs";
+      public static final String TIME_FIELD_SPECS_KEY = "timeFieldSpec";
+      public static final String DATETIME_FIELD_SPECS_KEY = "dateTimeFieldSpecs";
+    }
+
     public enum InstanceType {
       CONTROLLER, BROKER, SERVER, MINION
     }
@@ -108,6 +116,7 @@ public class CommonConstants {
         return ServerType.REALTIME;
       }
     }
+
     public static final String SET_INSTANCE_ID_TO_HOSTNAME_KEY = "pinot.set.instance.id.to.hostname";
 
     public static final String KEY_OF_SERVER_NETTY_PORT = "pinot.server.netty.port";
@@ -336,7 +345,8 @@ public class CommonConstants {
        * During realtime segment completion, the value of this enum decides how  non-winner servers should replace  the completed segment.
        */
       public enum CompletionMode {
-        DEFAULT, // default behavior - if the in memory segment in the non-winner server is equivalent to the committed segment, then build and replace, else download
+        DEFAULT,
+        // default behavior - if the in memory segment in the non-winner server is equivalent to the committed segment, then build and replace, else download
         DOWNLOAD // non-winner servers always download the segment, never build it
       }
 

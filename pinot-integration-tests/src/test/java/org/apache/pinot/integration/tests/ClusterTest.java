@@ -519,6 +519,10 @@ public abstract class ClusterTest extends ControllerTest {
     return postQuery(new PinotQueryRequest("pql", query), _brokerBaseApiUrl);
   }
 
+  public String getBrokerBaseApiUrl() {
+    return _brokerBaseApiUrl;
+  }
+
   public static JsonNode postQuery(PinotQueryRequest r, String brokerBaseApiUrl)
       throws Exception {
     return postQuery(r.getQuery(), brokerBaseApiUrl, false, r.getQueryFormat());

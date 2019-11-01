@@ -21,6 +21,7 @@ package org.apache.pinot.core.segment.index;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import java.io.DataInputStream;
 import java.io.File;
@@ -70,7 +71,7 @@ public class SegmentMetadataImpl implements SegmentMetadata {
   private static final Logger LOGGER = LoggerFactory.getLogger(SegmentMetadataImpl.class);
 
   private final File _indexDir;
-  private final Map<String, ColumnMetadata> _columnMetadataMap;
+  private Map<String, ColumnMetadata> _columnMetadataMap;
   private String _tableName;
   private String _segmentName;
   private final Set<String> _allColumns;
@@ -144,7 +145,6 @@ public class SegmentMetadataImpl implements SegmentMetadata {
     } else {
       segmentMetadataPropertiesConfiguration.addProperty(TIME_UNIT, null);
     }
-
     segmentMetadataPropertiesConfiguration.addProperty(SEGMENT_TOTAL_DOCS, segmentMetadata.getTotalRawDocs());
 
     _crc = segmentMetadata.getCrc();
@@ -556,6 +556,11 @@ public class SegmentMetadataImpl implements SegmentMetadata {
       default:
         throw new IllegalArgumentException();
     }
+  }
+
+  @VisibleForTesting
+  public void setColumnMetadataMap(Map<String, ColumnMetadata> columnMetadataMap) {
+    _columnMetadataMap = columnMetadataMap;
   }
 
   /**

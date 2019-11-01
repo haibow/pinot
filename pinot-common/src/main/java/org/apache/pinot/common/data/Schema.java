@@ -45,6 +45,8 @@ import org.apache.pinot.common.utils.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.pinot.common.utils.CommonConstants.Helix.Schema.*;
+
 
 /**
  * The <code>Schema</code> class is defined for each table to describe the details of the table's fields (columns).
@@ -364,30 +366,30 @@ public final class Schema {
    */
   public ObjectNode toJsonObject() {
     ObjectNode jsonObject = JsonUtils.newObjectNode();
-    jsonObject.put("schemaName", _schemaName);
+    jsonObject.put(SCHEMA_NAME_KEY, _schemaName);
     if (!_dimensionFieldSpecs.isEmpty()) {
       ArrayNode jsonArray = JsonUtils.newArrayNode();
       for (DimensionFieldSpec dimensionFieldSpec : _dimensionFieldSpecs) {
         jsonArray.add(dimensionFieldSpec.toJsonObject());
       }
-      jsonObject.set("dimensionFieldSpecs", jsonArray);
+      jsonObject.set(DIMENSION_FIELD_SPECS_KEY, jsonArray);
     }
     if (!_metricFieldSpecs.isEmpty()) {
       ArrayNode jsonArray = JsonUtils.newArrayNode();
       for (MetricFieldSpec metricFieldSpec : _metricFieldSpecs) {
         jsonArray.add(metricFieldSpec.toJsonObject());
       }
-      jsonObject.set("metricFieldSpecs", jsonArray);
+      jsonObject.set(METRIC_FIELD_SPECS_KEY, jsonArray);
     }
     if (_timeFieldSpec != null) {
-      jsonObject.set("timeFieldSpec", _timeFieldSpec.toJsonObject());
+      jsonObject.set(TIME_FIELD_SPECS_KEY, _timeFieldSpec.toJsonObject());
     }
     if (!_dateTimeFieldSpecs.isEmpty()) {
       ArrayNode jsonArray = JsonUtils.newArrayNode();
       for (DateTimeFieldSpec dateTimeFieldSpec : _dateTimeFieldSpecs) {
         jsonArray.add(dateTimeFieldSpec.toJsonObject());
       }
-      jsonObject.set("dateTimeFieldSpecs", jsonArray);
+      jsonObject.set(DATETIME_FIELD_SPECS_KEY, jsonArray);
     }
     return jsonObject;
   }

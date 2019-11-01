@@ -23,6 +23,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
@@ -35,7 +36,6 @@ import org.apache.commons.io.FileUtils;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.pinot.common.config.TableConfig;
-import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.data.Schema;
 import org.apache.pinot.common.metadata.ZKMetadataProvider;
 import org.apache.pinot.common.metrics.ServerMetrics;
@@ -48,10 +48,15 @@ import org.apache.pinot.core.data.manager.config.TableDataManagerConfig;
 import org.apache.pinot.core.data.manager.offline.TableDataManagerProvider;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegment;
 import org.apache.pinot.core.indexsegment.immutable.ImmutableSegmentLoader;
+import org.apache.pinot.core.indexsegment.mutable.MutableSegmentImpl;
+import org.apache.pinot.core.segment.index.SegmentMetadataImpl;
 import org.apache.pinot.core.segment.index.loader.IndexLoadingConfig;
 import org.apache.pinot.core.segment.index.loader.LoaderUtils;
+import org.apache.pinot.core.segment.index.loader.defaultcolumn.BaseDefaultColumnHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.apache.pinot.core.segment.index.loader.defaultcolumn.BaseDefaultColumnHandler.computeDefaultColumnActionMap;
 
 
 /**
@@ -121,12 +126,12 @@ public class HelixInstanceDataManager implements InstanceDataManager {
   @Override
   public void addRealtimeSegment(@Nonnull String realtimeTableName, @Nonnull String segmentName)
       throws Exception {
-    LOGGER.info("Adding segment: {} to table: {}", segmentName, realtimeTableName);
+    LOGGER.warn("Adding segment: {} to table: {}", segmentName, realtimeTableName);
     TableConfig tableConfig = ZKMetadataProvider.getTableConfig(_propertyStore, realtimeTableName);
     Preconditions.checkNotNull(tableConfig);
     _tableDataManagerMap.computeIfAbsent(realtimeTableName, k -> createTableDataManager(k, tableConfig))
         .addSegment(segmentName, tableConfig, new IndexLoadingConfig(_instanceDataManagerConfig, tableConfig));
-    LOGGER.info("Added segment: {} to table: {}", segmentName, realtimeTableName);
+    LOGGER.warn("Added segment: {} to table: {}", segmentName, realtimeTableName);
   }
 
   private TableDataManager createTableDataManager(@Nonnull String tableNameWithType, @Nonnull TableConfig tableConfig) {
@@ -194,7 +199,20 @@ public class HelixInstanceDataManager implements InstanceDataManager {
 
     File indexDir = segmentMetadata.getIndexDir();
     if (indexDir == null) {
-      LOGGER.info("Skip reloading REALTIME consuming segment: {} in table: {}", segmentName, tableNameWithType);
+//      if (!shouldReloadConsumingSegment()) {
+//        LOGGER.info("Skip reloading REALTIME consuming segment: {} in table: {}", segmentName, tableNameWithType);
+//        return;
+//      }
+      LOGGER.info("Try reloading REALTIME consuming segment: {} in table: {}", segmentName, tableNameWithType);
+      SegmentMetadataImpl segmentMetadataImpl = (SegmentMetadataImpl) segmentMetadata;
+      Map<String, BaseDefaultColumnHandler.DefaultColumnAction> defaultColumnActionMap =
+          computeDefaultColumnActionMap(schema, segmentMetadataImpl);
+      // If the schema did not change since the mutable segment started consuming, we should only see virtual columns in the map
+      LOGGER.info("defaultColumnActionMap: " + defaultColumnActionMap.toString());
+      MutableSegmentImpl mutableSegment =  (MutableSegmentImpl)(_tableDataManagerMap.get(tableNameWithType).acquireSegment(segmentMetadataImpl.getName()).getSegment());
+      mutableSegment.addExtraColumns(schema, defaultColumnActionMap);
+      if (!mutableSegment.getExtraColumnsFieldMap().isEmpty())
+        LOGGER.info("getExtraColumnsFieldMap: " + mutableSegment.getExtraColumnsFieldMap().toString());
       return;
     }
     Preconditions.checkState(indexDir.isDirectory(), "Index directory: %s is not a directory", indexDir);
@@ -270,6 +288,10 @@ public class HelixInstanceDataManager implements InstanceDataManager {
   @Override
   public int getMaxParallelRefreshThreads() {
     return _instanceDataManagerConfig.getMaxParallelRefreshThreads();
+  }
+
+  public boolean shouldReloadConsumingSegment() {
+    return _instanceDataManagerConfig.shouldReloadConsumingSegment();
   }
 
   @Nullable

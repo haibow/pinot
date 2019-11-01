@@ -48,6 +48,8 @@ public class HelixInstanceDataManagerConfig implements InstanceDataManagerConfig
   public static final String INSTANCE_SEGMENT_TAR_DIR = "segmentTarDir";
   // Key of segment directory
   public static final String INSTANCE_BOOTSTRAP_SEGMENT_DIR = "bootstrap.segment.dir";
+  // Key of segment directory
+  public static final String INSTANCE_ENABLE_RELOAD_CONSUMING_SEGMENT = "enable.reload.consuming.segment";
   // Key of table data directory
   public static final String kEY_OF_TABLE_DATA_DIRECTORY = "directory";
   // Key of table data directory
@@ -183,6 +185,10 @@ public class HelixInstanceDataManagerConfig implements InstanceDataManagerConfig
 
   public int getMaxParallelSegmentBuilds() {
     return _instanceDataManagerConfiguration.getInt(MAX_PARALLEL_SEGMENT_BUILDS, 0);
+  }
+
+  public boolean shouldReloadConsumingSegment() {
+    return _instanceDataManagerConfiguration.getBoolean(INSTANCE_ENABLE_RELOAD_CONSUMING_SEGMENT, false);
   }
 
   @Override

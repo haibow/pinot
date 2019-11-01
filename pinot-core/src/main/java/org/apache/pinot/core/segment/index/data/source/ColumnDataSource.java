@@ -27,18 +27,24 @@ import org.apache.pinot.core.common.DataSourceMetadata;
 import org.apache.pinot.core.io.reader.DataFileReader;
 import org.apache.pinot.core.io.reader.SingleColumnMultiValueReader;
 import org.apache.pinot.core.io.reader.SingleColumnSingleValueReader;
-import org.apache.pinot.core.io.reader.impl.v1.SortedIndexReader;
+import org.apache.pinot.core.io.reader.impl.v1.SortedIndexMultiValueReader;
+import org.apache.pinot.core.io.reader.impl.v1.SortedIndexSingleValueReader;
 import org.apache.pinot.core.operator.blocks.MultiValueBlock;
 import org.apache.pinot.core.operator.blocks.SingleValueBlock;
 import org.apache.pinot.core.realtime.impl.dictionary.BaseMutableDictionary;
+import org.apache.pinot.core.segment.extracolumn.BaseExtraColumnProvider;
 import org.apache.pinot.core.segment.index.ColumnMetadata;
 import org.apache.pinot.core.segment.index.column.ColumnIndexContainer;
 import org.apache.pinot.core.segment.index.readers.BloomFilterReader;
 import org.apache.pinot.core.segment.index.readers.Dictionary;
 import org.apache.pinot.core.segment.index.readers.InvertedIndexReader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 public final class ColumnDataSource extends DataSource {
+  private static final Logger LOGGER = LoggerFactory.getLogger(BaseExtraColumnProvider.class);
+
   private final String _operatorName;
   private final FieldSpec.DataType _dataType;
   private final boolean _isSingleValue;
@@ -83,7 +89,10 @@ public final class ColumnDataSource extends DataSource {
     if (dictionary != null) {
       // Dictionary-based index
       if (isSorted) {
-        Preconditions.checkState(invertedIndex instanceof SortedIndexReader);
+        if (isSingleValue)
+          Preconditions.checkState(invertedIndex instanceof SortedIndexSingleValueReader);
+        else
+          Preconditions.checkState(invertedIndex instanceof SortedIndexMultiValueReader);
       }
     } else {
       // Raw index

@@ -19,6 +19,7 @@
 package org.apache.pinot.core.indexsegment.mutable;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Sets;
 import it.unimi.dsi.fastutil.ints.IntArrays;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -29,6 +30,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
 import org.apache.pinot.common.config.SegmentPartitionConfig;
 import org.apache.pinot.common.data.DimensionFieldSpec;
@@ -51,8 +53,12 @@ import org.apache.pinot.core.realtime.impl.dictionary.BaseOffHeapMutableDictiona
 import org.apache.pinot.core.realtime.impl.dictionary.MutableDictionaryFactory;
 import org.apache.pinot.core.realtime.impl.invertedindex.RealtimeInvertedIndexReader;
 import org.apache.pinot.core.segment.creator.impl.V1Constants;
+import org.apache.pinot.core.segment.extracolumn.ExtraColumnContext;
+import org.apache.pinot.core.segment.extracolumn.ExtraColumnProvider;
+import org.apache.pinot.core.segment.extracolumn.ExtraColumnProviderFactory;
 import org.apache.pinot.core.segment.index.SegmentMetadataImpl;
 import org.apache.pinot.core.segment.index.data.source.ColumnDataSource;
+import org.apache.pinot.core.segment.index.loader.defaultcolumn.BaseDefaultColumnHandler;
 import org.apache.pinot.core.segment.index.readers.BloomFilterReader;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnContext;
 import org.apache.pinot.core.segment.virtualcolumn.VirtualColumnProvider;
@@ -67,6 +73,8 @@ import org.slf4j.LoggerFactory;
 
 
 public class MutableSegmentImpl implements MutableSegment {
+  private static final Logger LOGGER = LoggerFactory.getLogger(MutableSegmentImpl.class);
+
   // For multi-valued column, forward-index.
   // Maximum number of multi-values per row. We assert on this.
   private static final int MAX_MULTI_VALUES_PER_ROW = 1000;
@@ -79,9 +87,9 @@ public class MutableSegmentImpl implements MutableSegment {
   private final long _startTimeMillis = System.currentTimeMillis();
 
   private final String _segmentName;
-  private final Schema _schema;
+  private final Schema _originalSchema;
   private final int _capacity;
-  private final SegmentMetadata _segmentMetadata;
+  private final SegmentMetadata _originalSegmentmetadata;
   private final boolean _offHeap;
   private final PinotDataBufferMemoryManager _memoryManager;
   private final RealtimeSegmentStatsHistory _statsHistory;
@@ -111,11 +119,16 @@ public class MutableSegmentImpl implements MutableSegment {
   private volatile long _lastIndexedTimeMs = Long.MIN_VALUE;
   private volatile long _latestIngestionTimeMs = Long.MIN_VALUE;
 
+  /* Placeholder for extra columns.
+   * If the table schema is changed before the consuming segment is committed, newly added columns would appear in _extraColumns.
+   */
+  private volatile Map<String, FieldSpec> _extraColumnsFieldMap = new ConcurrentHashMap();
+
   public MutableSegmentImpl(RealtimeSegmentConfig config) {
     _segmentName = config.getSegmentName();
-    _schema = config.getSchema();
+    _originalSchema = config.getSchema();
     _capacity = config.getCapacity();
-    _segmentMetadata = new SegmentMetadataImpl(config.getRealtimeSegmentZKMetadata(), _schema) {
+    _originalSegmentmetadata = new SegmentMetadataImpl(config.getRealtimeSegmentZKMetadata(), _originalSchema) {
       @Override
       public int getTotalDocs() {
         return _numDocsIndexed;
@@ -143,10 +156,10 @@ public class MutableSegmentImpl implements MutableSegment {
     _statsHistory = config.getStatsHistory();
     _segmentPartitionConfig = config.getSegmentPartitionConfig();
 
-    Collection<FieldSpec> allFieldSpecs = _schema.getAllFieldSpecs();
+    Collection<FieldSpec> allFieldSpecs = _originalSchema.getAllFieldSpecs();
     List<FieldSpec> physicalFieldSpecs = new ArrayList<>(allFieldSpecs.size());
-    List<DimensionFieldSpec> physicalDimensionFieldSpecs = new ArrayList<>(_schema.getDimensionNames().size());
-    List<MetricFieldSpec> physicalMetricFieldSpecs = new ArrayList<>(_schema.getMetricNames().size());
+    List<DimensionFieldSpec> physicalDimensionFieldSpecs = new ArrayList<>(_originalSchema.getDimensionNames().size());
+    List<MetricFieldSpec> physicalMetricFieldSpecs = new ArrayList<>(_originalSchema.getMetricNames().size());
 
     for (FieldSpec fieldSpec : allFieldSpecs) {
       if (!fieldSpec.isVirtualColumn()) {
@@ -242,6 +255,21 @@ public class MutableSegmentImpl implements MutableSegment {
 
   public long getMaxTime() {
     return _maxTime;
+  }
+
+  public Map<String, FieldSpec> getExtraColumnsFieldMap() {
+    return _extraColumnsFieldMap;
+  }
+
+  public void addExtraColumns(Schema schema,
+      Map<String, BaseDefaultColumnHandler.DefaultColumnAction> defaultColumnActionMap) {
+    LOGGER.debug("Adding extra columns based on schema: " + schema.toSingleLineJsonString());
+    defaultColumnActionMap.forEach(((columnName, defaultColumnAction) -> {
+      if (defaultColumnAction.isAddAction() && !schema.getFieldSpecFor(columnName).isVirtualColumn()) {
+        _extraColumnsFieldMap.put(columnName, schema.getFieldSpecFor(columnName));
+      }
+    }));
+    LOGGER.debug("extra columns: " + _extraColumnsFieldMap.toString());
   }
 
   @Override
@@ -420,13 +448,13 @@ public class MutableSegmentImpl implements MutableSegment {
 
   @Override
   public SegmentMetadata getSegmentMetadata() {
-    return _segmentMetadata;
+    return _originalSegmentmetadata;
   }
 
   @Override
   public Set<String> getColumnNames() {
-    // Return all column names, virtual and physical.
-    return _schema.getColumnNames();
+    // Return all column names, virtual, physical and extra columns.
+    return Sets.union(_originalSchema.getColumnNames(), _extraColumnsFieldMap.keySet());
   }
 
   @Override
@@ -437,17 +465,24 @@ public class MutableSegmentImpl implements MutableSegment {
       physicalColumnNames.add(fieldSpec.getName());
     }
 
-    return physicalColumnNames;
+    return Sets.union(physicalColumnNames, _extraColumnsFieldMap.keySet());
   }
 
   @Override
   public ColumnDataSource getDataSource(String columnName) {
-    FieldSpec fieldSpec = _schema.getFieldSpecFor(columnName);
-    if (fieldSpec.isVirtualColumn()) {
+    FieldSpec fieldSpec = _originalSchema.getFieldSpecFor(columnName);
+    if (fieldSpec == null) {
+      // column not found in the original schema. Try to find it from the extra column
+      ExtraColumnContext extraColumnContext =
+          new ExtraColumnContext(_extraColumnsFieldMap.get(columnName), _numDocsIndexed + 1);
+      ExtraColumnProvider extraColumnProvider = ExtraColumnProviderFactory.buildProvider(extraColumnContext);
+      return new ColumnDataSource(extraColumnProvider.buildColumnIndexContainer(extraColumnContext),
+          extraColumnProvider.buildMetadata(extraColumnContext));
+    } else if (fieldSpec.isVirtualColumn()) {
       VirtualColumnContext virtualColumnContext =
           new VirtualColumnContext(NetUtil.getHostnameOrAddress(), getSegmentName(), columnName, _numDocsIndexed + 1);
-      VirtualColumnProvider virtualColumnProvider =
-          VirtualColumnProviderFactory.buildProvider(_schema.getFieldSpecFor(columnName).getVirtualColumnProvider());
+      VirtualColumnProvider virtualColumnProvider = VirtualColumnProviderFactory
+          .buildProvider(_originalSchema.getFieldSpecFor(columnName).getVirtualColumnProvider());
       return new ColumnDataSource(virtualColumnProvider.buildColumnIndexContainer(virtualColumnContext),
           virtualColumnProvider.buildMetadata(virtualColumnContext));
     } else {
@@ -531,7 +566,7 @@ public class MutableSegmentImpl implements MutableSegment {
       }
     }
     _invertedIndexMap.clear();
-    _segmentMetadata.close();
+    _originalSegmentmetadata.close();
     try {
       _memoryManager.close();
     } catch (IOException e) {
@@ -604,7 +639,7 @@ public class MutableSegmentImpl implements MutableSegment {
       dictIds[i++] = (Integer) dictIdMap.get(fieldSpec.getName());
     }
 
-    String timeColumnName = _schema.getTimeColumnName();
+    String timeColumnName = _originalSchema.getTimeColumnName();
     if (timeColumnName != null) {
       dictIds[i] = (Integer) dictIdMap.get(timeColumnName);
     }
@@ -675,7 +710,7 @@ public class MutableSegmentImpl implements MutableSegment {
     }
 
     // Time column should be dictionary encoded.
-    String timeColumn = _schema.getTimeColumnName();
+    String timeColumn = _originalSchema.getTimeColumnName();
     if (noDictionaryColumns.contains(timeColumn)) {
       _logger
           .warn("Metrics aggregation cannot be turned ON in presence of no-dictionary time column, eg: {}", timeColumn);
