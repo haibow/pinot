@@ -60,7 +60,7 @@ public class AvroUtils {
    * Given an Avro schema, map from column to field type and time unit, return the equivalent Pinot schema.
    *
    * @param avroSchema Avro schema
-   * @param fieldTypeMap Map from column to field type
+   * @param fieldTypeMap Map from column to field type. Default to dimension if field is not defined.
    * @param timeUnit Time unit
    * @return Pinot schema
    */
@@ -72,11 +72,11 @@ public class AvroUtils {
       String fieldName = field.name();
       FieldSpec.DataType dataType = extractFieldDataType(field);
       boolean isSingleValueField = isSingleValueField(field);
-      if (fieldTypeMap == null) {
+      if (fieldTypeMap == null || !fieldTypeMap.containsKey(fieldName)) {
+        LOGGER.info(String.format("Field type not specified for field: %s. Default to dimension", fieldName));
         pinotSchema.addField(new DimensionFieldSpec(fieldName, dataType, isSingleValueField));
       } else {
         FieldSpec.FieldType fieldType = fieldTypeMap.get(fieldName);
-        Preconditions.checkNotNull(fieldType, "Field type not specified for field: %s", fieldName);
         switch (fieldType) {
           case DIMENSION:
             pinotSchema.addField(new DimensionFieldSpec(fieldName, dataType, isSingleValueField));
